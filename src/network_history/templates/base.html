@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Network history{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="site-header">
+    <div><p class="eyebrow">LOCAL NETWORK</p><a class="brand" href="{{ url_for('activity') }}">Network history</a></div>
+    <nav aria-label="Main navigation">
+      <a href="{{ url_for('activity') }}" {% if request.endpoint == 'activity' %}aria-current="page"{% endif %}>Activity</a>
+      <a href="{{ url_for('devices') }}" {% if request.endpoint == 'devices' %}aria-current="page"{% endif %}>Devices</a>
+    </nav>
+  </header>
+  <main>
+    {% for message in get_flashed_messages() %}
+      <p class="notice" role="status">{{ message }}</p>
+    {% endfor %}
+    <section class="status-panel" aria-label="Collector status">
+      <div class="status-heading">
+        <h2>Collector <span class="badge">{{ 'Running' if collecting else 'Idle' }}</span></h2>
+        <form action="{{ url_for('collect') }}" method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <button type="submit" {% if collecting %}disabled{% endif %}>Collect now</button>
+        </form>
+      </div>
+      <dl class="status-grid">
+        <div><dt>Last successful scrape</dt><dd>{{ state.last_successful_scrape_at|localtime }}</dd></div>
+        <div><dt>Rows in last successful scrape</dt><dd>{{ state.last_scrape_row_count }}</dd></div>
+        <div><dt>Imported through</dt><dd>{{ state.last_imported_timestamp|localtime if state.last_imported_timestamp else 'No history imported' }}</dd></div>
+      </dl>
+      {% if state.last_error %}
+        <div class="error" role="alert"><strong>Last error</strong><p>{{ state.last_error }}</p></div>
+      {% endif %}
+    </section>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>Times shown in {{ timezone }}. Refresh the page to see new collection results.</footer>
+</body>
+</html>

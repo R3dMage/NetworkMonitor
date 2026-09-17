@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Devices · Network history{% endblock %}
+{% block content %}
+<section>
+  <div class="page-heading"><div><h1>Devices</h1><p>Discovered automatically as history is imported. Names stay local to this application.</p></div></div>
+  {% for device in devices %}
+    <form class="device-card" method="post" action="{{ url_for('save_device') }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="mac" value="{{ device.mac }}">
+      <div class="device-mac"><code>{{ device.mac }}</code><a href="{{ url_for('activity', mac=device.mac) }}">View activity</a></div>
+      <label for="name-{{ loop.index }}">Friendly name</label>
+      <input id="name-{{ loop.index }}" name="friendly_name" value="{{ device.friendly_name }}" maxlength="200" placeholder="For example, Living room TV">
+      <label for="notes-{{ loop.index }}">Notes <span class="muted">(optional)</span></label>
+      <textarea id="notes-{{ loop.index }}" name="notes" maxlength="2000" rows="2">{{ device.notes or '' }}</textarea>
+      <div><button type="submit">Save device</button></div>
+    </form>
+  {% else %}
+    <div class="empty"><h2>No devices discovered yet</h2><p>MAC addresses will appear after the first successful import.</p></div>
+  {% endfor %}
+</section>
+{% endblock %}

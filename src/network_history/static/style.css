@@ -1,0 +1,46 @@
+:root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #172c35; background: #f3f6f6; }
+* { box-sizing: border-box; }
+body { margin: 0; font-size: 15px; line-height: 1.5; }
+a { color: #076d69; text-underline-offset: 3px; }
+.site-header { background: #fff; border-bottom: 1px solid #dce5e7; padding: 24px max(24px, calc((100% - 1200px)/2)); display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.eyebrow { margin: 0 0 4px; color: #59717b; font-size: 10px; font-weight: 750; letter-spacing: 2px; }
+.brand { font-size: 23px; font-weight: 750; color: #172c35; text-decoration: none; }
+nav { display: flex; gap: 24px; }
+nav a { text-decoration: none; padding: 8px 0; }
+nav a[aria-current] { font-weight: 700; border-bottom: 2px solid #087d76; }
+main { max-width: 1248px; margin: auto; padding: 32px 24px; }
+h1 { font-size: 28px; margin: 0; letter-spacing: -.6px; }
+h2 { font-size: 17px; margin: 0; }
+p { margin: 8px 0; }
+.page-heading { margin: 32px 0 20px; }
+.page-heading p, .muted { color: #5c727b; }
+.status-panel { padding: 24px; background: #fff; border: 1px solid #dce5e7; border-radius: 12px; }
+.status-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.badge { display: inline-block; font-size: 11px; padding: 3px 9px; margin-left: 8px; background: #e4f3ef; color: #196354; border-radius: 20px; font-weight: 600; }
+.status-grid { display: grid; grid-template-columns: 1.2fr 1fr 1.2fr; gap: 24px; margin: 24px 0 0; }
+dt { font-size: 12px; color: #59717b; margin-bottom: 5px; }
+dd { margin: 0; font-weight: 600; font-size: 13px; }
+button { border: 1px solid #076d69; background: #076d69; color: #fff; padding: 9px 16px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+button:hover { background: #055751; }
+button:disabled { opacity: .5; cursor: default; }
+button.secondary { background: #fff; color: #076d69; }
+input, select, textarea { font: inherit; border: 1px solid #b9ccd1; border-radius: 5px; padding: 9px 11px; background: #fff; color: inherit; }
+input:focus, select:focus, textarea:focus, button:focus-visible, a:focus-visible { outline: 3px solid #7bd2c6; outline-offset: 2px; }
+.filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.filter select { min-width: 260px; max-width: 100%; }
+.table-wrap { overflow-x: auto; background: #fff; border: 1px solid #dce5e7; border-radius: 10px; }
+table { border-collapse: collapse; width: 100%; text-align: left; }
+th { background: #edf2f3; color: #526a73; font-size: 12px; font-weight: 650; padding: 12px 18px; }
+td { padding: 14px 18px; border-top: 1px solid #e8eeef; vertical-align: top; }
+.time { min-width: 220px; font-size: 12px; color: #526a73; }
+code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.url { overflow-wrap: anywhere; white-space: pre-wrap; min-width: 220px; }
+.notice { padding: 14px 18px; background: #e1f2ec; border: 1px solid #b1dbce; border-radius: 6px; margin: 0 0 20px; }
+.error { margin-top: 20px; padding: 14px; background: #fff0ed; border-left: 3px solid #bc5642; color: #84372a; overflow-wrap: anywhere; white-space: pre-wrap; }
+.empty { background: #fff; padding: 40px; border: 1px dashed #c2d3d8; border-radius: 10px; color: #526a73; }
+.device-card { display: grid; gap: 10px; background: #fff; padding: 24px; border: 1px solid #dce5e7; border-radius: 10px; margin-bottom: 16px; }
+.device-card label { font-size: 13px; font-weight: 650; }
+.device-mac { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 12px; }
+.device-mac code { font-size: 15px; font-weight: 700; }
+footer { max-width: 1248px; margin: auto; padding: 0 24px 32px; font-size: 12px; color: #647c84; }
+@media (max-width: 700px) { .site-header { align-items: flex-start; flex-direction: column; padding: 20px; } .status-grid { grid-template-columns: 1fr; gap: 16px; } main { padding: 20px 16px; } .filter select { min-width: 0; width: 100%; } .device-mac { align-items: flex-start; flex-direction: column; } .status-panel { padding: 18px; } }

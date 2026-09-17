@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Activity · Network history{% endblock %}
+{% block content %}
+<section>
+  <div class="page-heading"><div><h1>Recent activity</h1><p>Latest 100 matching records, newest first.</p></div></div>
+  <form class="filter" action="{{ url_for('activity') }}" method="get">
+    <label for="mac">Device</label>
+    <select id="mac" name="mac" required>
+      <option disabled {% if selected_mac is none %}selected{% endif %}>Choose a device</option>
+      {% for device in devices %}
+        <option value="{{ device.mac }}" {% if device.mac == selected_mac %}selected{% endif %}>{{ device.friendly_name or 'Unnamed device' }} · {{ device.mac }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="secondary">Filter</button>
+    <a href="{{ url_for('activity') }}">All devices</a>
+  </form>
+  {% if records %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th scope="col">Time</th><th scope="col">Device / MAC</th><th scope="col">URL / hostname</th></tr></thead>
+        <tbody>
+          {% for record in records %}
+            <tr>
+              <td class="time">{{ record.timestamp|localtime }}</td>
+              <td><strong>{{ record.friendly_name or 'Unnamed device' }}</strong><br><code>{{ record.mac if record.mac is not none else '(missing MAC)' }}</code></td>
+              <td class="url">{{ record.url if record.url is not none else '(missing URL)' }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty"><h2>No activity yet</h2><p>Collected history will appear here. Use Collect now to test your router connection, or wait for the next scheduled run.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

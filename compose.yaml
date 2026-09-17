@@ -1,0 +1,61 @@
+name: network-history
+
+x-common: &common
+  image: network-history:local
+  build:
+    context: .
+    target: production
+  restart: unless-stopped
+  environment:
+    ROUTER_HOST: ${ROUTER_HOST:-}
+    ROUTER_SSH_PORT: ${ROUTER_SSH_PORT:-22}
+    ROUTER_SSH_USERNAME: ${ROUTER_SSH_USERNAME:-}
+    ROUTER_SSH_KEY_FILE: ${ROUTER_SSH_KEY_FILE:-/run/secrets/router_key}
+    ROUTER_SSH_KEY_PASSPHRASE_FILE: ${ROUTER_SSH_KEY_PASSPHRASE_FILE:-}
+    ROUTER_SSH_KNOWN_HOSTS_FILE: ${ROUTER_SSH_KNOWN_HOSTS_FILE:-/run/secrets/known_hosts}
+    ROUTER_DB_PATH: ${ROUTER_DB_PATH:-/jffs/.sys/WebHistory/WebHistory.db}
+    ROUTER_SQLITE_BIN: ${ROUTER_SQLITE_BIN:-sqlite3}
+    SSH_CONNECT_TIMEOUT_SECONDS: ${SSH_CONNECT_TIMEOUT_SECONDS:-15}
+    SSH_COMMAND_TIMEOUT_SECONDS: ${SSH_COMMAND_TIMEOUT_SECONDS:-120}
+    SCRAPE_CRON: "${SCRAPE_CRON:-*/5 * * * *}"
+    SCHEDULE_TIMEZONE: ${SCHEDULE_TIMEZONE:-UTC}
+    SAFETY_DELAY_SECONDS: ${SAFETY_DELAY_SECONDS:-300}
+    DATABASE_BACKEND: ${DATABASE_BACKEND:-sqlite}
+    DATABASE_PATH: ${DATABASE_PATH:-/data/network_history.db}
+    DATABASE_URL: ${DATABASE_URL:-}
+    TZ: ${TZ:-America/New_York}
+    WEB_PORT: 8080
+    API_DEFAULT_WINDOW_DAYS: ${API_DEFAULT_WINDOW_DAYS:-7}
+    API_MAX_RANGE_DAYS: ${API_MAX_RANGE_DAYS:-31}
+    API_DEFAULT_PAGE_SIZE: ${API_DEFAULT_PAGE_SIZE:-500}
+    API_MAX_PAGE_SIZE: ${API_MAX_PAGE_SIZE:-2000}
+  volumes:
+    - history-data:/data
+    - type: bind
+      source: ./secrets
+      target: /run/secrets
+      read_only: true
+      bind:
+        create_host_path: false
+  stop_grace_period: 30s
+
+services:
+  web:
+    <<: *common
+    command: ["serve"]
+    init: true
+    ports:
+      - "${WEB_BIND_ADDRESS:-127.0.0.1}:${WEB_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  scheduler:
+    <<: *common
+    command: ["scheduler"]
+
+volumes:
+  history-data:
