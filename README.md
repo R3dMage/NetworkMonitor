@@ -141,12 +141,13 @@ SMB, object storage, or a shared cloud filesystem. For remote/cloud storage use 
 database-server adapter. A volume provides persistence, not backups; back up using SQLite's
 backup API or stop both services and copy the complete database directory.
 
-Schema version 1:
+Schema version 2 (the original tables are unchanged):
 - history: generated id, nullable mac, integer timestamp, nullable url. No uniqueness on source fields.
 - devices: mac primary key, friendly_name, optional notes.
 - collector_state: singleton id, last_imported_timestamp, last_successful_scrape_at,
   last_scrape_row_count, last_error.
-- Timestamp/id and MAC/timestamp/id indexes; PRAGMA user_version tracks local migrations.
+- Timestamp/id, MAC/timestamp/id, and URL/timestamp/id/MAC indexes.
+  PRAGMA user_version tracks local migrations; version 2 adds only the domain index.
 
 ## Development and checks
 
@@ -175,9 +176,18 @@ Source files live in this repository. Runtime history lives in the named Docker 
 
 ## Read-only HTTP API
 
-The API is served by the existing web service at the same host/port as the HTML UI.
+The API uses **port 8080 by default**, shared with the HTML UI. Its default base URL is
+[http://localhost:8080](http://localhost:8080). For example:
+[http://localhost:8080/api/devices](http://localhost:8080/api/devices).
+
+`WEB_PORT` in `.env` controls the published host port. `WEB_PORT=8090` puts both the
+UI and API at `http://localhost:8090`; the internal container port remains 8080.
+`localhost` means the computer running Docker. The default binding, `127.0.0.1`,
+permits connections from that computer only. If LAN access has been explicitly enabled,
+use the Docker host's address and configured port.
 It uses the same network access policy as the UI and does not start collections.
-There is no database migration or change to collector scheduling/checkpointing.
+Collector scheduling/checkpointing is unchanged. The activity/summary extension adds one local
+index through schema migration 1 -> 2.
 
 ### List devices
 
@@ -318,5 +328,169 @@ Optional query arguments use the same strings as the HTTP API.
 These functions have no Flask dependency and can later be called by purpose-built MCP tools.
 `api.py` handles HTTP parameters/JSON/status codes; the existing repository owns all SQL.
 
-To apply code/configuration changes to the web service without restarting collection:
-`docker compose up -d --build --no-deps web`.
+### Endpoint overview
+
+| Endpoint | Meaning |
+| --- | --- |
+| GET /api/activity | Raw observations with optional device/domain/time filters |
+| GET /api/devices | Existing recent-device list; supports days=all |
+| GET /api/devices/{mac} | Device facts over all collected local history |
+| GET /api/domains/{domain} | Domain facts over all collected local history, including per-device facts |
+| GET /api/devices/{mac}/activity | Existing device-specific activity response and v1 cursors remain supported |
+
+### General activity
+
+`GET /api/activity` accepts optional `device`, `domain`, `from`, `to`, and `limit`
+parameters for the initial request, or `cursor` alone for continuation.
+All supplied filters combine with **AND**. `device` is the exact stored MAC address;
+there is no opaque device ID or separate `mac` query parameter.
+
+Full examples on the default port:
+
+```text
+http://localhost:8080/api/activity
+http://localhost:8080/api/activity?device=AA:BB:CC:DD:EE:FF
+http://localhost:8080/api/activity?domain=netflix.com
+http://localhost:8080/api/activity?device=AA:BB:CC:DD:EE:FF&domain=netflix.com
+http://localhost:8080/api/activity?from=2026-09-01T00:00:00Z&to=2026-09-08T00:00:00Z&limit=500
+http://localhost:8080/api/activity?cursor=<returned-cursor>
+```
+
+The same seven-day default, 31-day maximum, 500-row default page, 2,000-row maximum page,
+timezone parsing, UTC responses, and [from, to) bounds apply. Existing API environment
+variables control both activity endpoints.
+
+Example response:
+
+```json
+{
+  "filters": {"device": "AA:BB:CC:DD:EE:FF", "domain": "netflix.com"},
+  "range": {"from": "2026-09-10T12:00:00Z", "to": "2026-09-17T12:00:00Z"},
+  "activity": [
+    {
+      "timestamp": "2026-09-16T20:00:00Z",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "friendly_name": "Living room TV",
+      "domain": "netflix.com"
+    },
+    {
+      "timestamp": "2026-09-16T20:00:00Z",
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "friendly_name": "Living room TV",
+      "domain": "netflix.com"
+    }
+  ],
+  "pagination": {"limit": 500, "has_more": false, "next_cursor": null}
+}
+```
+
+Omitted filters are echoed as null. Observations remain chronological, with the internal
+row ID breaking ties. Duplicates and missing source MAC/domain values are preserved.
+Unknown device/domain filters return 200 with an empty activity array.
+
+General activity uses a v2 cursor that records endpoint scope, both filters, the fixed
+range/page size, last position, and initial upper row ID. It has the same snapshot behavior
+as the existing device-activity endpoint: later imports are excluded until a fresh request.
+Cursors cannot be exchanged between endpoints or combined with other parameters.
+Malformed/oversized cursors and invalid parameters produce structured 400 responses.
+Cursors are limited to 4,096 characters; unusually long raw filter values that cannot fit
+produce an explicit error instead of returning an unusable continuation.
+
+### Exact domain identifiers
+
+`domain` refers to the raw stored router URL/hostname value. Matching is exact and
+case-sensitive. `netflix.com`, `www.netflix.com`, `Netflix.com`, and a full URL
+are separate values. There is no subdomain expansion, suffix matching, normalization,
+reputation lookup, or interpretation.
+
+For query parameters use your HTTP client's parameter encoder. For a domain-summary path,
+percent-encode the identifier, including reserved characters in full URLs. For example,
+the stored `https://example.com/a?x=1#part` has this summary URL:
+
+```text
+http://localhost:8080/api/domains/https%3A%2F%2Fexample.com%2Fa%3Fx%3D1%23part
+```
+
+### Domain summaries
+
+`GET /api/domains/{domain}` summarizes all matching observations in the local database.
+For example: [http://localhost:8080/api/domains/netflix.com](http://localhost:8080/api/domains/netflix.com).
+
+```json
+{
+  "domain": "netflix.com",
+  "scope": "all_collected_history",
+  "first_seen": "2026-09-02T18:00:00Z",
+  "last_seen": "2026-09-16T20:00:00Z",
+  "total_observation_count": 3,
+  "distinct_device_count": 2,
+  "devices": [
+    {
+      "mac": "AA:BB:CC:DD:EE:01",
+      "friendly_name": "Office laptop",
+      "first_seen": "2026-09-02T18:00:00Z",
+      "last_seen": "2026-09-02T18:00:00Z",
+      "observation_count": 1
+    },
+    {
+      "mac": "AA:BB:CC:DD:EE:FF",
+      "friendly_name": "Living room TV",
+      "first_seen": "2026-09-16T20:00:00Z",
+      "last_seen": "2026-09-16T20:00:00Z",
+      "observation_count": 2
+    }
+  ]
+}
+```
+
+Counts include every duplicate observation. All matching device groups are returned,
+ordered by MAC; no groups are silently truncated. Missing MAC observations contribute
+to the total and appear in a final `mac: null` group. `distinct_device_count` counts
+non-null MACs only. Names without an assignment are null.
+
+A single grouped read supplies per-device statistics; overall statistics are combined from
+those same groups so concurrent imports cannot cause inconsistent totals. An unknown domain
+returns 404 with error code `domain_not_found`.
+
+### Device summaries
+
+`GET /api/devices/{mac}` provides overall local-history facts and current device metadata:
+
+```text
+http://localhost:8080/api/devices/AA:BB:CC:DD:EE:FF
+```
+
+```json
+{
+  "mac": "AA:BB:CC:DD:EE:FF",
+  "friendly_name": "Living room TV",
+  "notes": null,
+  "scope": "all_collected_history",
+  "first_seen": "2026-09-01T10:00:00Z",
+  "last_seen": "2026-09-16T20:00:00Z",
+  "total_observation_count": 15,
+  "distinct_domain_count": 4
+}
+```
+
+`total_observation_count` includes duplicates and rows with a missing domain.
+`distinct_domain_count` counts distinct non-null raw domain values. A known device with no
+history returns zero counts and null first/last-seen timestamps. An unknown MAC returns
+404 with error code `device_not_found`.
+
+Summary endpoints intentionally accept no query parameters: their scope is overall collected
+local history, not the default recent window. They do not contain top-domain lists, threat
+scores, anomaly scores, or AI judgments.
+
+### Summary implementation and performance
+
+`queries.query_activity(repository, settings, device=..., domain=..., from_time=..., to_time=..., limit=..., cursor=...)`,
+`queries.get_device_summary(repository, mac)`, and
+`queries.get_domain_summary(repository, domain)` are reusable without HTTP or Flask.
+Controllers only adapt request parameters and JSON/error responses; repository methods own SQL.
+
+The existing timestamp/id and MAC/timestamp/id indexes support general and device activity.
+The new URL/timestamp/id/MAC index supports domain-filtered activity and covers the history
+fields needed for domain grouping. Exact overall counts still examine matching history:
+they are not constant-time counters. Device distinct-domain counts read that device's rows.
+There are no reporting tables, background aggregation jobs, or additional dependencies.

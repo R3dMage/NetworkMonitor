@@ -7,6 +7,8 @@ from network_history.models import (
     Activity,
     CollectorState,
     Device,
+    DeviceSummary,
+    DomainDeviceSummary,
     HistoryPage,
     HistoryRow,
     StoredActivity,
@@ -34,14 +36,16 @@ class SQLiteRepository:
         with self._connection() as db:
             # Existing databases need no writer lock just to start a collection process.
             version = db.execute("PRAGMA user_version").fetchone()[0]
-            if version == 1:
+            if version == 2:
                 return
-            if version != 0:
-                raise RuntimeError(f"Unsupported database schema version: {version}")
-            db.execute("PRAGMA journal_mode=WAL")
-            db.execute("BEGIN IMMEDIATE")
-            version = db.execute("PRAGMA user_version").fetchone()[0]
             if version not in (0, 1):
+                raise RuntimeError(f"Unsupported database schema version: {version}")
+            if version == 0:
+                db.execute("PRAGMA journal_mode=WAL")
+            db.execute("BEGIN IMMEDIATE")
+            # Another process may have migrated while we waited for the writer lock.
+            version = db.execute("PRAGMA user_version").fetchone()[0]
+            if version not in (0, 1, 2):
                 raise RuntimeError(f"Unsupported database schema version: {version}")
             if version == 0:
                 statements = (
@@ -67,6 +71,10 @@ class SQLiteRepository:
                 )
                 for statement in statements:
                     db.execute(statement)
+                version = 1
+            if version == 1:
+                db.execute("CREATE INDEX history_domain ON history (url, timestamp, id, mac)")
+                db.execute("PRAGMA user_version=2")
 
     def collection_lock(self):
         return file_lock(self.lock_path)
@@ -172,11 +180,12 @@ class SQLiteRepository:
 
     def activity_page(
         self,
-        mac: str,
+        mac: str | None,
         start: int,
         end: int,
         limit: int,
         *,
+        domain: str | None = None,
         after: tuple[int, int] | None = None,
         snapshot_id: int | None = None,
     ) -> HistoryPage:
@@ -185,13 +194,54 @@ class SQLiteRepository:
             db.execute("BEGIN")
             if snapshot_id is None:
                 snapshot_id = db.execute("SELECT COALESCE(MAX(id), 0) FROM history").fetchone()[0]
-            query = """SELECT id, timestamp, url FROM history
-                       WHERE mac=? AND timestamp >= ? AND timestamp < ? AND id <= ?"""
-            parameters = [mac, start, end, snapshot_id]
+            query = """SELECT h.id, h.timestamp, h.url, h.mac, d.friendly_name
+                       FROM history h LEFT JOIN devices d ON d.mac=h.mac
+                       WHERE h.timestamp >= ? AND h.timestamp < ? AND h.id <= ?"""
+            parameters = [start, end, snapshot_id]
+            if mac is not None:
+                query += " AND h.mac=?"
+                parameters.append(mac)
+            if domain is not None:
+                query += " AND h.url=?"
+                parameters.append(domain)
             if after is not None:
-                query += " AND (timestamp, id) > (?, ?)"
+                query += " AND (h.timestamp, h.id) > (?, ?)"
                 parameters.extend(after)
-            query += " ORDER BY timestamp ASC, id ASC LIMIT ?"
+            query += " ORDER BY h.timestamp ASC, h.id ASC LIMIT ?"
             parameters.append(limit)
             rows = [StoredActivity(**dict(row)) for row in db.execute(query, parameters)]
             return HistoryPage(rows=rows, snapshot_id=snapshot_id)
+
+    def device_summary(self, mac: str) -> DeviceSummary | None:
+        with self._connection() as db:
+            db.execute("BEGIN")
+            row = db.execute(
+                """SELECT d.mac, d.friendly_name, d.notes,
+                          MIN(h.timestamp) AS first_seen, MAX(h.timestamp) AS last_seen,
+                          COUNT(h.id) AS total_observation_count,
+                          COUNT(DISTINCT h.url) AS distinct_domain_count
+                   FROM devices d LEFT JOIN history h ON h.mac=d.mac
+                   WHERE d.mac=?
+                   GROUP BY d.mac, d.friendly_name, d.notes""",
+                (mac,),
+            ).fetchone()
+            return DeviceSummary(**dict(row)) if row is not None else None
+
+    def domain_device_summaries(self, domain: str) -> list[DomainDeviceSummary]:
+        with self._connection() as db:
+            db.execute("BEGIN")
+            # One grouped scan supplies both overall and per-device facts. The query
+            # layer combines these groups, so totals cannot disagree during imports.
+            return [
+                DomainDeviceSummary(**dict(row))
+                for row in db.execute(
+                    """SELECT h.mac, d.friendly_name,
+                              MIN(h.timestamp) AS first_seen, MAX(h.timestamp) AS last_seen,
+                              COUNT(*) AS observation_count
+                       FROM history h LEFT JOIN devices d ON d.mac=h.mac
+                       WHERE h.url=?
+                       GROUP BY h.mac, d.friendly_name
+                       ORDER BY h.mac IS NULL, h.mac""",
+                    (domain,),
+                )
+            ]

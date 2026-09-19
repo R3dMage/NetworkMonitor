@@ -3,7 +3,14 @@
 from flask import Blueprint, jsonify, request
 
 from network_history.config import Settings
-from network_history.queries import QueryError, query_device_activity, query_devices
+from network_history.queries import (
+    QueryError,
+    get_device_summary,
+    get_domain_summary,
+    query_activity,
+    query_device_activity,
+    query_devices,
+)
 from network_history.storage.repository import Repository
 
 
@@ -19,7 +26,7 @@ def create_api(settings: Settings, repository: Repository) -> Blueprint:
 
     @api.errorhandler(QueryError)
     def query_error(error):
-        status = 404 if error.code == "device_not_found" else 400
+        status = 404 if error.code in {"device_not_found", "domain_not_found"} else 400
         return jsonify(error={"code": error.code, "message": str(error)}), status
 
     @api.get("/devices")
@@ -41,5 +48,31 @@ def create_api(settings: Settings, repository: Repository) -> Blueprint:
                 cursor=args.get("cursor"),
             )
         )
+
+    @api.get("/activity")
+    def observations():
+        args = parameters({"device", "domain", "from", "to", "limit", "cursor"})
+        return jsonify(
+            query_activity(
+                repository,
+                settings,
+                device=args.get("device"),
+                domain=args.get("domain"),
+                from_time=args.get("from"),
+                to_time=args.get("to"),
+                limit=args.get("limit"),
+                cursor=args.get("cursor"),
+            )
+        )
+
+    @api.get("/devices/<mac>")
+    def device_summary(mac):
+        parameters(set())
+        return jsonify(get_device_summary(repository, mac))
+
+    @api.get("/domains/<path:domain>")
+    def domain_summary(domain):
+        parameters(set())
+        return jsonify(get_domain_summary(repository, domain))
 
     return api

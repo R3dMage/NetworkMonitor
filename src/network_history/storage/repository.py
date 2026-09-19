@@ -2,7 +2,15 @@ from collections.abc import Sequence
 from contextlib import AbstractContextManager
 from typing import Protocol
 
-from network_history.models import Activity, CollectorState, Device, HistoryPage, HistoryRow
+from network_history.models import (
+    Activity,
+    CollectorState,
+    Device,
+    DeviceSummary,
+    DomainDeviceSummary,
+    HistoryPage,
+    HistoryRow,
+)
 
 
 class Repository(Protocol):
@@ -24,11 +32,15 @@ class Repository(Protocol):
     def devices_seen_between(self, start: int, end: int) -> list[Device]: ...
     def activity_page(
         self,
-        mac: str,
+        mac: str | None,
         start: int,
         end: int,
         limit: int,
         *,
+        domain: str | None = None,
         after: tuple[int, int] | None = None,
         snapshot_id: int | None = None,
     ) -> HistoryPage: ...
+
+    def device_summary(self, mac: str) -> DeviceSummary | None: ...
+    def domain_device_summaries(self, domain: str) -> list[DomainDeviceSummary]: ...

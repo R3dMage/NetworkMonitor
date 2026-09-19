@@ -37,9 +37,31 @@ class StoredActivity:
     id: int
     timestamp: int
     url: str | None
+    mac: str | None = None
+    friendly_name: str | None = None
 
 
 @dataclass(frozen=True)
 class HistoryPage:
     rows: list[StoredActivity]
     snapshot_id: int
+
+
+@dataclass(frozen=True)
+class DeviceSummary:
+    mac: str
+    friendly_name: str
+    notes: str | None
+    first_seen: int | None
+    last_seen: int | None
+    total_observation_count: int
+    distinct_domain_count: int
+
+
+@dataclass(frozen=True)
+class DomainDeviceSummary:
+    mac: str | None
+    friendly_name: str | None
+    first_seen: int
+    last_seen: int
+    observation_count: int
