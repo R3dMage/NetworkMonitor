@@ -6,6 +6,7 @@ from flask import Flask, abort, flash, redirect, render_template, request, sessi
 
 from network_history.api import create_api
 from network_history.config import Settings
+from network_history.explore import create_explore
 from network_history.storage.repository import Repository
 
 
@@ -23,11 +24,12 @@ def create_app(settings: Settings, repository: Repository, manual) -> Flask:
     def localtime(value):
         if value is None:
             return "Never"
-        return (
-            datetime.fromtimestamp(value, UTC)
-            .astimezone(timezone)
-            .strftime("%Y-%m-%d %H:%M:%S %Z (%z)")
+        value = (
+            datetime.fromisoformat(value)
+            if isinstance(value, str)
+            else datetime.fromtimestamp(value, UTC)
         )
+        return value.astimezone(timezone).strftime("%Y-%m-%d %H:%M:%S %Z (%z)")
 
     @app.before_request
     def csrf():
@@ -112,4 +114,5 @@ def create_app(settings: Settings, repository: Repository, manual) -> Flask:
         return {"status": "ok"}
 
     app.register_blueprint(create_api(settings, repository))
+    app.register_blueprint(create_explore(settings, repository))
     return app

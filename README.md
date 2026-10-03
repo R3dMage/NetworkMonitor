@@ -34,6 +34,34 @@ The default publication is localhost only. The UI has no login and is intended f
 local use. Change `WEB_BIND_ADDRESS` only if you intend to expose it on your network.
 Forms use CSRF tokens, and router text is escaped and displayed without clickable URL links.
 
+## Explore
+
+Open **Explore** in the navigation, or visit [http://localhost:8080/explore](http://localhost:8080/explore).
+
+- **Activity Explorer** searches raw observations by device, exact domain, and local From/To
+  dates. The initial view uses the configured API lookback (seven days by default).
+  Results run oldest first and retain duplicate observations. Device and domain filters
+  apply together; domain matching does not include subdomains automatically.
+- **Domain Lookup** shows overall facts and every per-device breakdown for the exact stored
+  hostname or URL.
+- **Device Summary** shows overall facts, the raw MAC, friendly name, and notes. Continue
+  using the Devices page to edit names and notes.
+
+Dropdowns include all known devices, including older ones. Dates are entered and displayed
+in the configured `TZ` timezone. From is inclusive and To is exclusive; existing API range
+and page-size limits apply. Blank To means now; blank From means the configured lookback
+before To. Daylight-saving times that are nonexistent or ambiguous are rejected with guidance
+to choose another boundary. Summary views always cover all collected history.
+
+Use **Next** and **Previous** to browse activity without handling cursors. The web process
+retains at most 64 viewed activity pages across browser sessions; observations on saved
+pages remain as viewed. New imports do not enter an existing search snapshot. Use Search
+or Reset to get fresh results. After a restart or when an older page is evicted, a message
+asks you to run Search again. No navigation state is written to the history database.
+
+Explore is server-rendered and works without JavaScript. It uses the same query functions as
+the read-only API.
+
 ## Scheduling
 
 `SCRAPE_CRON="*/5 * * * *"` targets minute 00, 05, 10, 15, ... each hour.

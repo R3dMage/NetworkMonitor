@@ -11,6 +11,7 @@
     <div><p class="eyebrow">LOCAL NETWORK</p><a class="brand" href="{{ url_for('activity') }}">Network history</a></div>
     <nav aria-label="Main navigation">
       <a href="{{ url_for('activity') }}" {% if request.endpoint == 'activity' %}aria-current="page"{% endif %}>Activity</a>
+      <a href="{{ url_for('explore.index') }}" {% if request.blueprint == 'explore' %}aria-current="page"{% endif %}>Explore</a>
       <a href="{{ url_for('devices') }}" {% if request.endpoint == 'devices' %}aria-current="page"{% endif %}>Devices</a>
     </nav>
   </header>
@@ -37,6 +38,6 @@
     </section>
     {% block content %}{% endblock %}
   </main>
-  <footer>Times shown in {{ timezone }}. Refresh the page to see new collection results.</footer>
+  <footer>Times shown in {{ timezone }}. {% if request.blueprint == 'explore' %}Run a new search to see the latest observations.{% else %}Refresh the page to see new collection results.{% endif %}</footer>
 </body>
 </html>

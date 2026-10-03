@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Explore · Network history{% endblock %}
+{% macro device_options(include_all=false) %}
+  <option value="" {% if selected == '' %}selected{% endif %}>{{ 'All devices' if include_all else 'Choose a device' }}</option>
+  {% for device in devices %}
+    <option value="{{ 'mac:' ~ device.mac }}" {% if selected == 'mac:' ~ device.mac %}selected{% endif %}>{{ device.friendly_name or 'Unnamed device' }} · {{ device.mac if device.mac else '(empty MAC)' }}</option>
+  {% endfor %}
+{% endmacro %}
+{% macro device_label(mac, name) %}
+  <strong>{{ name or 'Unnamed device' }}</strong><br>
+  <code>{{ mac if mac is not none and mac != '' else '(missing MAC)' if mac is none else '(empty MAC)' }}</code>
+{% endmacro %}
+{% macro seen(value) %}{{ value|localtime if value is not none else 'No observations' }}{% endmacro %}
+{% block content %}
+<section>
+  <div class="page-heading"><h1>Explore</h1><p>Inspect collected observations and factual device or domain summaries.</p></div>
+  <nav class="explore-tabs" aria-label="Explore sections">
+    <a href="{{ url_for('explore.index') }}" {% if tab == 'activity' %}aria-current="page"{% endif %}>Activity Explorer</a>
+    <a href="{{ url_for('explore.index', tab='domain') }}" {% if tab == 'domain' %}aria-current="page"{% endif %}>Domain Lookup</a>
+    <a href="{{ url_for('explore.index', tab='device') }}" {% if tab == 'device' %}aria-current="page"{% endif %}>Device Summary</a>
+  </nav>
+  {% if tab == 'activity' %}
+    <h2>Activity Explorer</h2>
+    <p class="muted">Times use {{ timezone }}. Start is included; end is excluded. Maximum range: {{ max_days }} days.</p>
+    <form class="explore-form" method="get" action="{{ url_for('explore.index') }}">
+      <input type="hidden" name="tab" value="activity">
+      <label>Device<select name="device">{{ device_options(true) }}</select></label>
+      <label><span>Domain / hostname <span class="muted">(optional)</span></span><input name="domain" value="{{ domain }}" placeholder="For example, netflix.com" aria-describedby="domain-help"></label>
+      <label>From<input type="datetime-local" step="1" name="from" value="{{ start }}"></label>
+      <label>To<input type="datetime-local" step="1" name="to" value="{{ end }}"></label>
+      <p id="domain-help" class="form-help">Exact domain match: netflix.com and www.netflix.com are separate values. Device and domain filters apply together. Blank To uses the current time; blank From uses the preceding {{ default_days }} days.</p>
+      <div class="form-actions"><button type="submit">Search</button><a href="{{ url_for('explore.index') }}">Reset to recent activity</a></div>
+    </form>
+  {% elif tab == 'domain' %}
+    <h2>Domain Lookup</h2>
+    <p class="muted">Summary of all collected history. Enter the exact stored domain or URL.</p>
+    <form class="explore-form single-query" method="get" action="{{ url_for('explore.index') }}">
+      <input type="hidden" name="tab" value="domain">
+      <label>Domain / hostname<input name="domain" value="{{ domain }}" placeholder="For example, netflix.com" required></label>
+      <div class="form-actions"><button name="search" value="1" type="submit">Look up</button></div>
+    </form>
+  {% else %}
+    <h2>Device Summary</h2>
+    <p class="muted">Summary of all collected history. Names and notes can be edited on the <a href="{{ url_for('devices') }}">Devices page</a>.</p>
+    <form class="explore-form single-query" method="get" action="{{ url_for('explore.index') }}">
+      <input type="hidden" name="tab" value="device">
+      <label>Device<select name="device" required>{{ device_options() }}</select></label>
+      <div class="form-actions"><button name="search" value="1" type="submit">View</button></div>
+    </form>
+  {% endif %}
+  {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+  {% if result is not none %}
+    {% if tab == 'activity' %}
+      <p class="result-caption">{{ result.activity|length }} {{ 'observation' if result.activity|length == 1 else 'observations' }} on this page · Oldest first</p>
+      <p class="muted">From {{ result.range.from|localtime }} to {{ result.range.to|localtime }} (exclusive).</p>
+      {% if result.activity %}
+        <div class="table-wrap"><table>
+          <thead><tr><th scope="col">Time</th><th scope="col">Device / MAC</th><th scope="col">Domain / hostname</th></tr></thead>
+          <tbody>{% for row in result.activity %}<tr>
+            <td class="time">{{ row.timestamp|localtime }}</td>
+            <td>{{ device_label(row.mac, row.friendly_name) }}</td>
+            <td class="url">{{ row.domain if row.domain is not none else '(missing domain)' }}</td>
+          </tr>{% endfor %}</tbody>
+        </table></div>
+      {% else %}<div class="empty"><h2>No matching activity</h2><p>Try a different time range or fewer filters.</p></div>{% endif %}
+      <p class="muted">Saved pages preserve the observations already found. Use Search to refresh results.</p>
+      <nav class="pagination" aria-label="Activity pages">
+        {% if previous_url %}<a class="button-link secondary" href="{{ previous_url }}">Previous</a>{% endif %}
+        {% if next_url %}<a class="button-link" href="{{ next_url }}">Next</a>{% else %}<span class="muted">End of results</span>{% endif %}
+      </nav>
+    {% elif tab == 'domain' %}
+      <div class="summary-card">
+        <h2 class="url">{{ result.domain }}</h2><p class="muted">All collected history</p>
+        <dl class="summary-grid">
+          <div><dt>First seen</dt><dd>{{ seen(result.first_seen) }}</dd></div>
+          <div><dt>Last seen</dt><dd>{{ seen(result.last_seen) }}</dd></div>
+          <div><dt>Total observations</dt><dd>{{ result.total_observation_count }}</dd></div>
+          <div><dt>Distinct devices</dt><dd>{{ result.distinct_device_count }}</dd></div>
+        </dl>
+      </div>
+      <h2 class="breakdown-heading">Per-device observations</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th scope="col">Device / MAC</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Observations</th></tr></thead>
+        <tbody>{% for device in result.devices %}<tr>
+          <td>{{ device_label(device.mac, device.friendly_name) }}</td>
+          <td class="time">{{ seen(device.first_seen) }}</td>
+          <td class="time">{{ seen(device.last_seen) }}</td>
+          <td>{{ device.observation_count }}</td>
+        </tr>{% endfor %}</tbody>
+      </table></div>
+    {% else %}
+      <div class="summary-card">
+        <h2>{{ result.friendly_name or 'Unnamed device' }}</h2><code>{{ result.mac if result.mac else '(empty MAC)' }}</code>
+        <p class="muted">All collected history</p>
+        <dl class="summary-grid">
+          <div class="summary-notes"><dt>Notes</dt><dd>{{ result.notes or 'No notes' }}</dd></div>
+          <div><dt>First seen</dt><dd>{{ seen(result.first_seen) }}</dd></div>
+          <div><dt>Last seen</dt><dd>{{ seen(result.last_seen) }}</dd></div>
+          <div><dt>Total observations</dt><dd>{{ result.total_observation_count }}</dd></div>
+          <div><dt>Distinct domains</dt><dd>{{ result.distinct_domain_count }}</dd></div>
+        </dl>
+      </div>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
