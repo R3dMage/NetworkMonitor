@@ -7,6 +7,11 @@ from flask import Flask, abort, flash, redirect, render_template, request, sessi
 from network_history.api import create_api
 from network_history.config import Settings
 from network_history.explore import create_explore
+from network_history.request_log_web import (
+    create_request_log_page,
+    install_request_logging,
+)
+from network_history.request_logging import create_request_logger
 from network_history.storage.repository import Repository
 
 
@@ -19,9 +24,12 @@ def create_app(settings: Settings, repository: Repository, manual) -> Flask:
         MAX_CONTENT_LENGTH=16384,
     )
     timezone = ZoneInfo(settings.timezone)
+    request_logger = create_request_logger(settings)
+    install_request_logging(app, request_logger)
+    app.register_blueprint(create_request_log_page(settings, request_logger))
 
     @app.template_filter("localtime")
-    def localtime(value):
+    def localtime(value, date_format="%Y-%m-%d %H:%M:%S %Z (%z)"):
         if value is None:
             return "Never"
         value = (
@@ -29,7 +37,7 @@ def create_app(settings: Settings, repository: Repository, manual) -> Flask:
             if isinstance(value, str)
             else datetime.fromtimestamp(value, UTC)
         )
-        return value.astimezone(timezone).strftime("%Y-%m-%d %H:%M:%S %Z (%z)")
+        return value.astimezone(timezone).strftime(date_format)
 
     @app.before_request
     def csrf():

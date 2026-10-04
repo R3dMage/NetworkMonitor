@@ -13,6 +13,7 @@
       <a href="{{ url_for('activity') }}" {% if request.endpoint == 'activity' %}aria-current="page"{% endif %}>Activity</a>
       <a href="{{ url_for('explore.index') }}" {% if request.blueprint == 'explore' %}aria-current="page"{% endif %}>Explore</a>
       <a href="{{ url_for('devices') }}" {% if request.endpoint == 'devices' %}aria-current="page"{% endif %}>Devices</a>
+      <a href="{{ url_for('request_log.index') }}" {% if request.blueprint == 'request_log' %}aria-current="page"{% endif %}>Request Log</a>
     </nav>
   </header>
   <main>
