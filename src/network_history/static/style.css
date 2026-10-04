@@ -1,3 +1,20 @@
+.request-log-table { table-layout: fixed; min-width: 1000px; }
+.request-log-table th, .request-log-table td { padding: 12px 14px; overflow-wrap: anywhere; }
+.request-log-table td { font-size: 15px; }
+.request-log-table th:first-child { width: 195px; }
+.request-log-table th:nth-child(2) { width: 28%; }
+.request-log-table th:nth-child(4), .request-log-table th:nth-child(5) { width: 75px; }
+.request-log-table th:last-child { width: 100px; }
+.log-time, .log-duration { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.log-parameters { list-style: none; margin: 0; padding: 0; }
+.log-parameters li + li { margin-top: 4px; }
+.log-parameters li { white-space: pre-wrap; }
+.request-log-table .log-error-row td { border-top: 0; padding-top: 0; color: #84372a; }
+.log-has-error, .log-error-row { background: #fff8f5; }
+.log-success { color: #196354; }
+.log-failure { color: #84372a; font-weight: 700; }
+#log-limit { width: 110px; }
+.site-header nav { flex-wrap: wrap; }
 :root { color-scheme: light; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #172c35; background: #f3f6f6; }
 * { box-sizing: border-box; }
 body { margin: 0; font-size: 15px; line-height: 1.5; }

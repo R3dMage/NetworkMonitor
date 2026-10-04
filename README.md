@@ -62,6 +62,107 @@ asks you to run Search again. No navigation state is written to the history data
 Explore is server-rendered and works without JavaScript. It uses the same query functions as
 the read-only API.
 
+## Request Log
+
+Open **Request Log** in the navigation, or visit
+[http://localhost:8080/request-log](http://localhost:8080/request-log).
+It shows the latest 100 API query operations, newest first. Enter a positive
+whole number to show more; the default maximum is 1,000. Invalid or oversized values
+produce an explicit error and are never silently clamped. The table shows time, request
+path, submitted parameters, status, result count, and duration. Errors appear beneath the
+affected call. Times stay on one line, with the configured `TZ` shown above the table.
+IDs, sources, methods, operation names, and resolved filters are stored but not displayed;
+there are no per-row detail controls.
+
+### Storage and configuration
+
+Operational records live in **/data/request_log.db**, separately from collected history.
+The existing Docker volume persists both files; no new service or history migration is
+needed. Only the web service initializes/writes this log. Configuration:
+
+- `REQUEST_LOG_PATH=/data/request_log.db`
+- `REQUEST_LOG_MAX_DISPLAY=1000` (configurable from 100 through 10,000)
+
+The log store refuses to use the history database, including a symlink/hardlink to it,
+and refuses databases containing unrelated tables. A log-storage problem does not stop
+the web service. The two databases share disk capacity, so a full volume can affect both.
+
+The log has its own schema version and one table, `request_log`:
+`id`, `started_at_ms`, `source`, `operation`, `parameters_json`,
+`effective_parameters_json`, `http_method`, `http_path`, `success`, `http_status`,
+`result_count`, `duration_ms`, `error_code`, and `error_message`.
+Start timestamps are UTC epoch milliseconds. An index on
+`(started_at_ms DESC, id DESC)` supports recent reads and future age-based pruning.
+IDs are unique within this database; deleting/recreating it restarts the ID sequence.
+
+There is **no automatic retention**. To discard logs later, stop the web service before
+removing only the request-log database and any corresponding `-wal`/`-shm` files,
+then restart web. Never remove the history volume or history database to clear logs.
+The web service creates a new log database on startup.
+
+### What is recorded
+
+| Caller | Source | Operation |
+| --- | --- | --- |
+| GET /api/devices | http | list_devices |
+| GET /api/activity | http | get_activity |
+| GET /api/devices/{mac}/activity | http | get_device_activity |
+| GET /api/devices/{mac} | http | get_device_summary |
+| GET /api/domains/{domain} | http | get_domain_summary |
+
+One record covers parameter validation, the query, and response creation. HTTP status
+is the final response status. Duration excludes log persistence and network transmission.
+Activity counts are observations returned **on that page**, including duplicates.
+Device-list counts are returned devices. Summaries count as one object; a summary's
+total observation count is not the result count. Empty lists count as zero; failures
+have a null count. Resolved ranges, filters, and page sizes are recorded when available.
+
+All HTML UI interactions are excluded, including Explore searches, pagination, Recent
+Activity, device management, and Request Log views. Health checks, static assets, and
+collector operations are also excluded. Only the read-only API routes above automatically
+record operations.
+
+### Parameters and failure behavior
+
+Submitted API query and path parameters are stored as received by Flask, including
+unknown parameters, repeated values, complete URL identifiers, and pagination cursors.
+There is no parameter sanitization, redaction, or storage truncation. Percent-encoding
+is decoded by the HTTP framework. If a query parameter has the same name as a path
+parameter, the path value uses that name and the conflicting query value is retained
+under `query_parameters`.
+
+Headers, cookies, SSH credentials/configuration, environment values, response bodies,
+returned history rows, and device notes are not collected by the logger. Values a caller
+explicitly puts in API parameters are recorded as-is. The inspection page still escapes
+HTML and displays parameters as name/value pairs; long values wrap within their column.
+Stored parameter values remain intact.
+
+Known validation failures retain their messages. Unexpected exceptions use a generic
+description and exception type, without SQL, configuration, or raw exception text.
+
+Logging uses one short insert, SQLite WAL, and 25 ms lock timeouts for both the local
+logger lock and SQLite contention. These bound lock waits, not arbitrary operating-system
+disk latency. On failure, the query's result/status remains unchanged and that log entry
+is dropped. A sanitized warning goes to container logs and a 30-second cooldown limits
+repeated failures. A later request retries; there is no worker, queue, or automatic replay.
+The Request Log page shows unavailable/degraded state when the logger cannot be read.
+
+### Reusing operation logging
+
+`request_logging.RequestLogger` has no Flask dependency. An internal caller can use
+`logger.operation(source="internal", operation="get_activity", parameters=...)` as a
+context manager, and pass its query result through `scope.result(...)`.
+The scope records selected metadata on completion and records failures while preserving
+the original exception. A future MCP adapter can use exactly the same interface with
+`source="mcp"`; no MCP integration is implemented here.
+
+HTTP adapters use the same logger through a shared decorator and completion hooks.
+Calling a query function directly remains side-effect free unless the caller explicitly
+wraps it in an operation scope.
+
+To apply this feature and its new environment settings:
+`docker compose up -d --build --no-deps web`.
+
 ## Scheduling
 
 `SCRAPE_CRON="*/5 * * * *"` targets minute 00, 05, 10, 15, ... each hour.

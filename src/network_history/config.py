@@ -42,6 +42,8 @@ class Settings:
     api_max_range_days: int = 31
     api_default_page_size: int = 500
     api_max_page_size: int = 2000
+    request_log_path: str = "/data/request_log.db"
+    request_log_max_display: int = 1000
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -50,6 +52,7 @@ class Settings:
             "database_backend",
             "database_path",
             "database_url",
+            "request_log_path",
             "timezone",
             "schedule_timezone",
             "scrape_cron",
@@ -74,12 +77,17 @@ class Settings:
             api_max_range_days=_integer("API_MAX_RANGE_DAYS", 31),
             api_default_page_size=_integer("API_DEFAULT_PAGE_SIZE", 500),
             api_max_page_size=_integer("API_MAX_PAGE_SIZE", 2000),
+            request_log_max_display=_integer(
+                "REQUEST_LOG_MAX_DISPLAY", 1000, minimum=100, maximum=10000
+            ),
         )
         settings = cls(**values)
         settings.validate()
         return settings
 
     def validate(self) -> None:
+        if not 100 <= self.request_log_max_display <= 10000:
+            raise ConfigurationError("REQUEST_LOG_MAX_DISPLAY must be between 100 and 10000")
         if not 1 <= self.api_default_window_days <= self.api_max_range_days <= 3652058:
             raise ConfigurationError(
                 "API day limits must be positive; default cannot exceed maximum"

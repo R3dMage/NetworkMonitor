@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Request Log · Network history{% endblock %}
+{% block content %}
+<section>
+  <div class="page-heading"><h1>Request Log</h1><p>Recent API calls, newest first. Times shown in {{ timezone }}.</p></div>
+  <form class="filter" method="get" action="{{ url_for('request_log.index') }}">
+    <label for="log-limit">Show last</label>
+    <input id="log-limit" name="limit" type="number" min="1" step="1" value="{{ entered }}" required aria-describedby="log-limit-help">
+    <span>calls</span><button type="submit">Show</button>
+  </form>
+  <p id="log-limit-help" class="muted">Default: 100. Maximum: {{ maximum }}.</p>
+  {% if log_warning %}<p class="notice" role="status">{{ log_warning }}</p>{% endif %}
+  {% if error %}<p class="error" role="alert">{{ error }}</p>
+  {% else %}<p>Showing {{ entries|length }} {{ 'call' if entries|length == 1 else 'calls' }}.</p>{% endif %}
+  {% if entries %}
+  <div class="table-wrap"><table class="request-log-table">
+    <thead><tr>
+      <th scope="col">Time</th><th scope="col">Request</th><th scope="col">Parameters</th>
+      <th scope="col">Status</th><th scope="col">Results</th><th scope="col">Duration</th>
+    </tr></thead>
+    <tbody>{% for entry in entries %}
+      <tr{% if entry.error_message or entry.error_code %} class="log-has-error"{% endif %}>
+        <td class="log-time">{{ entry.timestamp|localtime('%Y-%m-%d %H:%M:%S') }}</td>
+        <td class="log-path">{{ entry.http_path or '—' }}</td>
+        <td>
+          {% if entry.parameter_items %}
+            <ul class="log-parameters">{% for name, value in entry.parameter_items %}
+              <li><span class="muted">{{ name }}:</span> {{ value }}</li>
+            {% endfor %}</ul>
+          {% else %}<span class="muted">None supplied</span>{% endif %}
+        </td>
+        <td class="{{ 'log-success' if entry.success else 'log-failure' }}">{{ entry.http_status if entry.http_status is not none else 'OK' if entry.success else 'Failed' }}</td>
+        <td>{{ entry.result_count if entry.result_count is not none else '—' }}</td>
+        <td class="log-duration">{{ '%.1f'|format(entry.duration_ms) }} ms</td>
+      </tr>
+      {% if entry.error_message or entry.error_code %}
+        <tr class="log-error-row"><td colspan="6"><strong>Error:</strong> {{ entry.error_message or entry.error_code }}</td></tr>
+      {% endif %}
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="muted">Results count the items returned by each call, not total matching history.</p>
+  {% elif not error %}
+    <div class="empty"><h2>No calls recorded yet</h2><p>Call a read-only API endpoint, then refresh this page.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

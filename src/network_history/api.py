@@ -11,6 +11,7 @@ from network_history.queries import (
     query_device_activity,
     query_devices,
 )
+from network_history.request_log_web import log_query, query_response
 from network_history.storage.repository import Repository
 
 
@@ -30,14 +31,16 @@ def create_api(settings: Settings, repository: Repository) -> Blueprint:
         return jsonify(error={"code": error.code, "message": str(error)}), status
 
     @api.get("/devices")
+    @log_query("list_devices")
     def devices():
         args = parameters({"days"})
-        return jsonify(query_devices(repository, settings, days=args.get("days")))
+        return query_response(query_devices(repository, settings, days=args.get("days")))
 
     @api.get("/devices/<mac>/activity")
+    @log_query("get_device_activity")
     def activity(mac):
         args = parameters({"from", "to", "limit", "cursor"})
-        return jsonify(
+        return query_response(
             query_device_activity(
                 repository,
                 settings,
@@ -50,9 +53,10 @@ def create_api(settings: Settings, repository: Repository) -> Blueprint:
         )
 
     @api.get("/activity")
+    @log_query("get_activity")
     def observations():
         args = parameters({"device", "domain", "from", "to", "limit", "cursor"})
-        return jsonify(
+        return query_response(
             query_activity(
                 repository,
                 settings,
@@ -66,13 +70,15 @@ def create_api(settings: Settings, repository: Repository) -> Blueprint:
         )
 
     @api.get("/devices/<mac>")
+    @log_query("get_device_summary")
     def device_summary(mac):
         parameters(set())
-        return jsonify(get_device_summary(repository, mac))
+        return query_response(get_device_summary(repository, mac))
 
     @api.get("/domains/<path:domain>")
+    @log_query("get_domain_summary")
     def domain_summary(domain):
         parameters(set())
-        return jsonify(get_domain_summary(repository, domain))
+        return query_response(get_domain_summary(repository, domain))
 
     return api
